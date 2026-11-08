@@ -11,10 +11,9 @@ Mapeamento e Políticas de Escrita}
 
 \author{Filipe L. Ribeiro, Davi Erlon L. Morais}
 
-
-\address{Colegiado de Ciência da Computação -- Universidade Federal do Vale do São Franciso
-  (Univasf)\\
-  56.304-917 -- Petrolina -- PE -- Brazil
+\address{
+    Universidade Federal do Vale do São Francisco (UNIVASF)\\
+    Av. José de Sá Maniçoba, S/N, Centro -- Petrolina -- PE -- Brasil
   \email{\{filipe.leiter,davi.erlon\}@discente.univasf.edu.br}
 }
 
@@ -23,52 +22,448 @@ Mapeamento e Políticas de Escrita}
 \maketitle
 
 \begin{abstract}
-  This meta-paperilooo describes the style to be used in articles and short papers
-  for SBC conferences. For papers in English, you should add just an abstract
-  while for the papers in Portuguese, we also ask for an abstract in
-  Portuguese (``resumo''). In both cases, abstracts should not have more than
-  10 lines and must be in the first page of the paper.
+  This paper presents a taxonomy of cache memory architectures, organized
+  around two design decisions: mapping methods (direct, fully associative,
+  and set-associative) and write policies (write-through and write-back for
+  write hits, with write-allocate and non-write-allocate briefly covered for
+  write misses). After establishing the basic concepts, each method is
+  described and compared through its advantages and drawbacks. The critical
+  analysis shows that no option is superior in isolation: miss rate does not
+  translate directly into performance, and the effect of each choice depends
+  on cache capacity, memory technology, and program behavior. The taxonomy
+  should therefore be read as a map of trade-offs, not as a ranking of
+  methods.
 \end{abstract}
-     
-\begin{resumo} 
-  [A taxonomia das arquiteturas de memória cache]
-  [Mapeamentos já estudados(direto, totalmente associativo e associativo por conjunto)]
-  [Políticas de escrita (duas dimensões ortogonais - acerto E erro)] 
+
+\begin{resumo}
+  Este artigo apresenta uma taxonomia das arquiteturas de memória cache,
+  organizada em torno de duas decisões de projeto: os métodos de mapeamento
+  (direto, totalmente associativo e associativo por conjunto) e as políticas
+  de escrita (\textit{write-through} e \textit{write-back} para acertos de
+  escrita, \textit{write-allocate} e \textit{non-write-allocate} citados brevemente
+  para erros de escrita). Após estabelecer os conceitos de base, cada método é descrito
+  e comparado por suas vantagens e desvantagens. A análise crítica mostra que
+  nenhuma opção é superior isoladamente: a taxa de erro não se traduz
+  diretamente em desempenho, e o efeito de cada escolha depende da
+  capacidade da cache, da tecnologia de memória e do comportamento do
+  programa. A taxonomia deve, portanto, ser lida como um mapa de
+  compromissos, e não como um ranking de métodos.
 \end{resumo}
 
 \section{Introdução}
 
-A distância entre a velocidade dos processadores e a latência da memória principal desafia a 
-arquitetura de computadores há décadas. Em 1965, Moore observou que o número de componentes por 
-circuito integrado dobrava a cada ano, projeção que se converteu, ao longo das gerações seguintes, 
-em ganho exponencial de desempenho dos processadores (MOORE, 1965). A memória principal, 
-mais lenta, não acompanhou esse ritmo, e o desequilíbrio crescente entre as duas curvas foi 
-denominado memory wall por Wulf e McKee (1995). A memória cache consolidou-se, então, como 
-solução estrutural para esse problema, ao se inserir entre o processador e a memória principal uma 
-hierarquia de memórias pequenas e rápidas, em que explora-se a localidade temporal e espacial dos 
-programas e evita-se que cada acesso custe toda a latência da DRAM (TANENBAUM; AUSTIN, 2013).
+Durante décadas, a arquitetura de computadores conviveu com um
+descompasso incômodo: os processadores aprenderam a calcular muito
+mais rápido do que as memórias aprenderam a responder. Embora a
+tecnologia de memória tenha evoluído de forma constante, o desempenho
+das CPUs evoluiu num ritmo ainda mais acelerado, e a diferença entre
+os dois só aumentou, ficando conhecida como memory wall \cite{wulf1995}.
+O resultado é que o processador, capaz de executar bilhões de operações
+por segundo, passa boa parte do tempo ocioso, esperando que um dado
+chegue da memória principal.
 
-Tema do paragrafo:
-O mapeamento, que define como os blocos da memória principal vão se distribuir pelas
-linhas da cache, através de diferentes métodos(são muitos, quais falar?)
-A politica de substituição que decide qual linha da cache é descartada quando um conjunto se 
-completa; A política de escrita, que determina quando e como as modificações alcançam a memória 
-principal(Smith, 1982) [Falar sobre problemas que esses entes trazem] \textbf{one}-page texts.
+Esse problema, no entanto, não é somente de natureza tecnológica, mas
+também econômica. Já existem memórias tão rápidas quanto os processadores,
+mas, para operar em plena velocidade, elas precisam estar no próprio chip
+da CPU, já que atravessar o barramento até a memória principal é um caminho
+lento demais. A solução, porém, esbarra em duas limitações. A primeira é o
+custo: quanto maior a memória embarcada, maior o chip e, consequentemente,
+mais cara a sua fabricação. A segunda é física: ainda que o preço não fosse
+um problema, um chip de processador não pode crescer indefinidamente. Restava, portanto,
+escolher entre uma pequena quantidade de memória rápida ou uma grande quantidade
+de memória lenta \cite{tanenbaum2013}.
 
-Tema do paragráfo:
-Otimizar o projeto de uma memória cache geralmente envolve quatro aspectos:
-Maximizar a probabilidade de encontrar na cache o alvo de uma referência à memória (a taxa de acerto);
-Minimizar o tempo para acessar informação que de fato está na cache (tempo de acesso);
-Minimizar o atraso devido a uma falta; e
-Minimizar as sobrecargas de atualização da memória principal, de manutenção da consistência entre 
-múltiplas caches etc.
+A partir desse impasse nasceu a memória cache, hoje a resposta estrutural
+mais consolidada ao problema. Ao combinar uma pequena quantidade de memória
+rápida com uma grande quantidade de memória lenta, por meio de técnicas já
+bem conhecidas, a cache oferece desempenho próximo ao da primeira, capacidade
+comparável à da segunda e custo módico \cite{tanenbaum2013}. A ideia básica de uma cache é simples:
+os dados presentes na memória usadas com mais frequência são mantidas na cache.
+Quando a CPU precisar de um dado, ela examina em primeiro lugar a cache; somente
+se não estiver ali é que ela recorre à memória principal. Se uma fração substancial
+dos dados estiver na cache, o tempo médio de acesso pode ser muito reduzido.
 
-\section{Metodologia de pesquisa}
+Dentre as diversos elementos que compõe um projeto de cachê, esse artigo
+foca e compara separadamente essencialmente em 2 principais: métodos de mapeamento,
+que são responsáveis por determinar de qual forma a memória principal é trazida
+para a memória cache, e em políticas de escrita, que são um conjunto de regras
+que definem como levar modificações da CPU sobre a memória cache para a memória
+principal \cite{stallings2017}.
 
 \section{Taxonomia e Sistematização Teórica}
 
-\section{Análise Crítica e Gargalos Arquiteturais}
+Antes de classificar e comparar as diferentes arquiteturas de cache,
+é necessário estabelecer o vocabulário que sustenta essa discussão.
+Esta seção apresenta primeiro os conceitos comuns à hierarquia de memória
+e, no início de cada subseção, as noções específicas de cada tema.
+
+\subsection{Conceitos Fundamentais}
+
+\begin{itemize}
+  \renewcommand{\labelitemi}{$\triangleright$}
+  \setlength{\itemsep}{3pt}
+
+  \item \textbf{Palavra:} unidade de dado que a CPU lê ou escreve em um
+  único acesso à memória, cujo tamanho depende da arquitetura.
+
+  \item \textbf{Bloco:} conjunto de palavras consecutivas da memória
+  principal, de tamanho fixo, tratado como a unidade de transferência
+  entre a memória principal e a cache.
+
+  \item \textbf{Linha:} posição da cache capaz de armazenar um bloco,
+  acompanhado de bits de controle.
+
+  \item \textbf{\textit{Tag}:} parte do endereço armazenada junto com cada
+  linha, usada para identificar qual bloco da memória principal a ocupa
+  naquele momento.
+
+  \item \textbf{Bit de validade:} bit de controle que indica se a linha
+  contém um bloco utilizável. Ao ligar o computador, por exemplo, a cache
+  está vazia e todas as linhas são inválidas.
+
+  \item \textbf{Localidade temporal:} tendência de um dado recentemente
+  referenciado ser referenciado novamente em um curto intervalo de tempo,
+  como ocorre com variáveis acessadas dentro de laços.
+
+  \item \textbf{Localidade espacial:} tendência de que, após o acesso a um
+  endereço, sejam acessados endereços vizinhos, como na busca sequencial
+  de instruções ou na varredura de vetores. É ela que justifica trazer
+  sempre um bloco inteiro, e não apenas uma palavra, para a cache.
+
+  \item \textbf{Acerto de cache (\textit{cache hit}):} situação em que o dado
+  requisitado já se encontra na cache e é entregue sem acesso à memória
+  principal.
+
+  \item \textbf{Erro de cache (\textit{cache miss}):} situação em que o dado não
+  está na cache, exigindo a busca do bloco correspondente na memória
+  principal.
+
+  \item \textbf{Taxa de erro:} fração dos acessos que resulta em erro.
+  Seu complemento é a taxa de acerto.
+  
+  \cite{tanenbaum2013} \cite{stallings2017}
+\end{itemize}
+
+\subsection{Métodos de Mapeamento}
+
+A memória principal é muito maior do que a cache: enquanto a primeira
+comporta milhões de blocos, a segunda dispõe de apenas algumas centenas
+ou milhares de linhas. Por isso, muitos blocos precisam compartilhar o
+mesmo espaço, e é necessária uma regra que defina em qual linha cada
+bloco pode ser colocado e onde o hardware deve procurá-lo quando a CPU
+solicitar um dado. Essa regra é a \textbf{função de mapeamento} \cite{stallings2017}.
+
+Como a função de mapeamento restringe as linhas disponíveis para cada
+bloco, dois blocos podem ser direcionados para a mesma linha. Se ambos
+forem usados de forma alternada, cada um expulsa o outro da cache a cada
+acesso, ainda que existam linhas livres em outras posições. Esse
+fenômeno é chamado de \textbf{conflito} e, em seu caso extremo, em que
+quase todas as referências resultam em erro, de \textit{thrashing}.
+
+Para dimensionar o quanto o mapeamento influencia o desempenho, é útil
+lembrar que os erros de cache se dividem em três categorias
+\cite{hill1989}, e que a \textbf{taxa de erro} se decorrem deles:
+
+\begin{itemize}
+  \renewcommand{\labelitemi}{$\triangleright$}
+  \setlength{\itemsep}{3pt}
+
+  \item \textbf{Erro compulsório:} ocorre no primeiro acesso a um bloco,
+  que ainda não poderia estar na cache. Acontece em qualquer organização.
+
+  \item \textbf{Erro de capacidade:} ocorre quando o conjunto de blocos
+  usado pelo programa é maior do que a cache, que, mesmo totalmente
+  aproveitada, não consegue mantê-los todos. Depende do tamanho da
+  cache, e não de como os blocos são posicionados.
+
+  \item \textbf{Erro de conflito:} ocorre quando um bloco é expulso por
+  outro que a regra de mapeamento destinou à mesma linha, mesmo havendo
+  espaço livre em outras posições da cache.
+
+\end{itemize}
+
+Como os erros compulsórios e de capacidade não dependem da regra de
+posicionamento, o erro de conflito é a única parcela da taxa de erro que
+o projeto de mapeamento consegue reduzir. Comparar métodos de mapeamento
+é, portanto, comparar o quanto cada um evita conflitos e a que custo de
+hardware, como mostram as subseções a seguir.
+
+\subsubsection{Mapeamento Direto}
+
+No mapeamento direto, cada bloco da memória principal pode ocupar apenas
+uma linha da cache, sempre a mesma, determinada por uma parte do endereço
+que funciona como número da linha. Como vários blocos compartilham a mesma
+linha, a \textit{tag}, formada pelos bits mais significativos do endereço,
+identifica qual deles está presente: o hardware vai direto à linha indicada
+e compara a \textit{tag} armazenada com a do endereço requisitado
+
+A principal vantagem do método é a simplicidade: basta uma única comparação
+por acesso, e não há decisão de substituição a tomar, o que resulta em uma
+implementação simples e de baixo custo. Sua desvantagem é a mesma rigidez
+que o torna simples: se um programa referenciar repetidamente dois blocos
+mapeados para a mesma linha, eles serão trocados continuamente e a taxa de
+acerto cairá, caracterizando o \textit{thrashing} \cite{stallings2017}. Existem técnicas que
+atenuam esse efeito reciclando os blocos recém-descartados, já que podem
+ser reutilizados a um custo pequeno, mas o conflito permanece como o
+principal limitador desse mapeamento.
+
+\subsubsection{Mapeamento Totalmente Associativo}
+
+O mapeamento totalmente associativo compensa a rigidez do mapeamento
+direto: qualquer bloco da memória principal pode ser carregado em qualquer
+linha da cache. Assim, o endereço é interpretado apenas como um campo de
+\textit{tag}, que identifica o bloco, e um campo de palavra, sem nenhum
+campo de linha. Para saber se um bloco está presente, a lógica de controle
+compara simultaneamente a \textit{tag} do endereço com a de todas as linhas
+
+A principal vantagem do método é a flexibilidade: como não há linha
+predeterminada, o conflito deixa de existir. Essa liberdade traz, porém,
+uma nova questão. Quando a cache está cheia e um bloco novo precisa
+entrar, qualquer linha pode ser sacrificada, e alguém precisa decidir qual.
+Essa decisão cabe ao \textbf{algoritmo de substituição}, que escolhe o
+bloco a ser removido buscando maximizar a taxa de acerto. Uma estratégia
+comum, por exemplo, é remover o bloco que está há mais tempo sem ser
+usado, apostando no princípio localidade temporal. Sua desvantagem é a complexidade
+do circuito necessário para examinar as \textit{tags} de todas as linhas
+em paralelo, o que o torna custoso. Por isso, essa organização é usada
+apenas em estruturas pequenas e críticas, de poucas entradas, como o
+\textit{Translation Lookaside Buffer} (TLB).
+
+\subsubsection{Mapeamento Associativo por Conjunto}
+
+O mapeamento associativo por conjunto é um meio-termo entre os dois métodos
+anteriores. A cache é organizada como uma série de conjuntos, cada um
+formado por $k$ linhas. Cada bloco é associado a um único conjunto, como no mapeamento
+direto, mas pode ocupar qualquer uma das linhas dentro dele, como no
+totalmente associativo. O endereço é interpretado em três campos:
+\textit{tag}, conjunto e palavra. O campo de conjunto leva diretamente ao
+conjunto correspondente, e a \textit{tag} do endereço é comparada apenas com
+as $k$ \textit{tags} desse conjunto, e não com as de toda a cache.
+
+A principal vantagem do método é reunir os pontos fortes dos dois extremos:
+os blocos que disputam o mesmo conjunto podem coexistir em linhas diferentes,
+reduzindo o conflito, e o circuito de comparação é bem menor do que o do
+totalmente associativo. Os dois métodos anteriores são, na verdade, casos
+extremos dessa organização: com $k = 1$ ela se reduz ao mapeamento direto
+e, com um único conjunto, ao totalmente associativo. Na prática, duas linhas
+por conjunto é a configuração mais comum e melhora significativamente a taxa
+de acerto em relação ao direto; quatro linhas trazem um ganho adicional
+modesto a um custo relativamente pequeno, e aumentos além disso têm pouco
+efeito \cite{hill1989}.
+Sua desvantagem é que a complexidade da cache cresce com a associatividade,
+o que nem sempre se justifica frente a simplesmente aumentar o tamanho da
+cache.
+
+\subsection{Políticas de Escrita}
+
+Quando a CPU escreve em um dado que está na cache, a cópia da cache passa
+a ser a mais recente, e é preciso decidir quando essa modificação chega à
+memória principal. A regra que toma essa decisão é a \textbf{política de
+escrita} \cite{stallings2017}. Ela importa por dois motivos. O primeiro é que a
+memória principal pode ser acessada por outros dispositivos, como um módulo
+de entrada e saída: se uma palavra foi alterada apenas na cache, o valor na
+memória está desatualizado e, se o dispositivo alterou a memória, é a
+palavra da cache que fica desatualizada. O segundo surge quando vários
+processadores compartilham a memória, cada um com sua cache local: uma
+escrita em uma cache pode invalidar a mesma palavra nas demais. Os conceitos
+de base para tratar esses problemas são:
+
+\begin{itemize}
+  \renewcommand{\labelitemi}{$\triangleright$}
+  \setlength{\itemsep}{3pt}
+
+  \item \textbf{Consistência:} garantia de que cache e memória principal
+  não guardam valores conflitantes para o mesmo dado.
+
+  \item \textbf{Coerência de cache:} propriedade de um sistema com várias
+  caches, como em um multiprocessador, em que uma escrita feita em uma delas
+  não deixa valores desatualizados do mesmo dado nas demais.
+
+  \item \textbf{Acerto de escrita (\textit{write hit}):} escrita sobre um
+  dado que já está na cache.
+
+  \item \textbf{Erro de escrita (\textit{write miss}):} escrita sobre um
+  dado que não está na cache.
+
+  \item \textbf{Bit de modificação (\textit{dirty bit}):} bit de controle
+  que indica que a linha foi alterada e, por isso, difere da cópia na
+  memória principal.
+\end{itemize}
+
+Para o caso de acerto de escrita, este trabalho considera as duas
+alternativas clássicas: \textit{write-through} e \textit{write-back}.
+
+\subsubsection{Write-through}
+
+No \textit{write-through}, toda operação de escrita é feita na cache e na
+memória principal ao mesmo tempo, o que garante que a memória principal
+esteja sempre atualizada. Isso simplifica a consistência e a comunicação com
+dispositivos de entrada e saída, e permite que os controladores de outras
+caches monitorem o tráfego para a memória e mantenham a coerência de suas
+próprias linhas.
+
+Sua desvantagem é o tráfego: cada escrita gera uma transferência para a
+memória, de modo que o consumo de largura de banda é proporcional ao número
+de escritas, e não ao de blocos distintos, o que pode criar um gargalo.
+Jouppi \cite{jouppi1993} mostra que esse custo é menor do que se supunha, pois uma
+estrutura auxiliar de poucas entradas entre a cache e o barramento absorve
+as escritas repetidas. O autor aponta ainda três vantagens da escrita direta
+que não dizem respeito ao tráfego: a conclusão da escrita em um único ciclo
+sob mapeamento direto, a integração natural ao \textit{pipeline} e a
+possibilidade de detectar erros por paridade, em vez de exigir correção.
+
+\subsubsection{Write-back}
+
+No \textit{write-back}, as atualizações são feitas apenas na cache, e a
+linha alterada é marcada por meio do \textit{dirty bit}. A memória principal
+só é atualizada quando essa linha é substituída, e o bloco é gravado de
+volta se, e somente se, o bit estiver marcado.
+
+A principal vantagem do método é a redução de tráfego: escritas sucessivas
+ao mesmo bloco geram uma única transferência para a memória principal.
+Em contrapartida, partes da memória principal podem ficar desatualizadas, e
+os acessos de dispositivos de entrada e saída só poderiam ser feitos por
+meio da cache, o que exige circuitos complexos e pode gerar um gargalo.
+Além disso, a coerência passa a depender de identificar quais cópias locais
+estão desatualizadas.
+
+\subsubsection{Erro de escrita}
+
+Uma operação de escrita também pode resultar em erro de cache, isto é, o
+dado a ser modificado não está na cache. Esse caso é independente da
+política adotada para o acerto de escrita e pode ser tratado por duas
+estratégias \cite{stallings2017}:
+
+\begin{itemize}
+  \renewcommand{\labelitemi}{$\triangleright$}
+  \setlength{\itemsep}{3pt}
+
+  \item \textit{\textbf{Write-allocate:}} a linha requerida é carregada
+  na cache a partir da memória principal e, em seguida, é atualizada pela
+  operação de escrita. Esse esquema é tipicamente usado com o método de
+  \textit{write-back}.
+
+  \item \textit{\textbf{Non-write-allocate:}} o bloco é modificado
+  diretamente na memória principal, sem ser trazido para a cache.
+\end{itemize}
+
+\section{Análise Crítica}
+
+As seções anteriores descreveram cada método isoladamente. Esta seção
+os confronta e mostra que nenhuma das escolhas pode ser avaliada em
+abstrato: o efeito de cada uma depende da capacidade da cache, da
+tecnologia da memória e do comportamento do programa.
+
+\subsection{O mapeamento como família paramétrica}
+
+Rao \cite{rao1978} demonstra que a cache associativa por conjunto equivale a
+uma estrutura totalmente associativa independente por conjunto, o que
+faz dos três esquemas pontos de uma mesma família paramétrica, distintos
+apenas pelo grau de restrição da liberdade de alocação. Com uma única
+posição por conjunto, reduz-se ao mapeamento direto; com um único
+conjunto abrangendo todas as linhas, à totalmente associativa. Dessa
+equivalência decorrem três consequências.
+
+A primeira é que toda comparação precisa fixar o tamanho das caches,
+pois, sem isso, a diferença de taxa de erro mistura o efeito da
+associatividade com o da capacidade. A segunda é que o mapeamento direto
+dispensa política de substituição, por não haver vítima a escolher,
+enquanto a associação por conjunto a exige de forma explícita, com o
+custo de estado que o outro evita. Além disso, ela obedece à invariante
+de que o tamanho da cache não excede o produto do número de vias pelo
+tamanho de página, o que vincula a escolha também ao sistema operacional
+\cite{hill1988}. A terceira é que a taxa de acerto não basta como critério,
+o que é discutido a seguir.
+
+\subsection{Taxa de erro não é desempenho}
+
+Elevar a associatividade reduz os erros de conflito, mas ao custo de mais
+comparadores e de lógica de seleção no caminho crítico. Por isso, Hill e
+Smith \cite{hill1989} demonstram que o tempo efetivo de acesso de uma cache de
+mapeamento direto pode ser menor que o de uma associativa de mesma
+capacidade, ainda que sua taxa de erro seja maior, e que o ganho da
+associatividade é decrescente, concentrado no primeiro incremento.
+
+A desvantagem do mapeamento direto também não é insuperável. Jouppi
+\cite{jouppi1990} mostra que boa parte dos erros de conflito é recuperável com uma
+\textit{victim cache} de poucas entradas. Sanchez e Kozyrakis \cite{sanchez2010}
+vão além e mostram que o acoplamento entre grau de associatividade e
+número de posições físicas é convencional, de modo que o espaço de
+projeto é mais amplo do que a taxonomia clássica sugere. Na prática, a
+associação por conjunto é o compromisso quase universal na indústria,
+e o mapeamento direto permanece como caso extremo de referência.
+
+\subsection{Políticas de escrita: volume e custo dependem do contexto}
+
+A discussão sobre \textit{write-through} costuma tratá-lo como
+inevitavelmente custoso em tráfego. Jouppi \cite{jouppi1993} mostra que essa
+desvantagem é menor do que a literatura supunha, pois uma estrutura
+auxiliar de poucas entradas entre a cache e o barramento absorve as
+escritas repetidas, e que o \textit{write-back} só oferece redução
+adicional apreciável a partir de determinada capacidade. O autor registra
+ainda três vantagens da escrita direta que não são de tráfego: a
+conclusão da escrita em um único ciclo sob mapeamento direto, a
+integração natural ao \textit{pipeline} e a detecção de erro por
+paridade em vez de correção.
+
+A política de escrita também não constitui uma decisão única. Jouppi
+\cite{jouppi1993} demonstra que alocar a linha na falta, buscar o bloco ausente e
+escrever antes de saber se a referência é um acerto são controles
+separados, e que a combinação adotada altera a taxa de erro total.
+
+O efeito de uma política tampouco se decide de forma isolada. Prihozhy
+\cite{prihozhy2019} mantém fixas as políticas de escrita e de substituição e varia
+apenas o mapeamento, medindo o volume de escritas de linha produzido por
+duas versões de um mesmo algoritmo, com sequências de endereços distintas
+sobre a mesma estrutura de dados. Nas organizações de menor
+associatividade, a versão de percurso mais localizado escreve mais; nas
+de maior, o volume cai e essa versão passa a apresentar ganho. Com tudo
+o mais constante, o efeito sobre o tráfego ainda assim inverte de
+sentido, inversão que o autor registra sem explicar, o que mostra que o
+fenômeno carece de explicação na literatura.
+
+Por fim, o custo unitário de cada \textit{write-back} também é
+condicional: em memórias de mudança de fase, a escrita apresenta latência
+e consumo superiores aos da leitura \cite{zhang2016}. Volume e custo
+são, portanto, dependentes de contexto.
+
+\subsection{Síntese}
+
+Os resultados convergem para uma mesma conclusão: as duas dimensões
+estudadas, ainda que apresentadas separadamente, interagem entre si e com
+fatores externos à taxonomia. A escolha de mapeamento altera o volume de
+escritas, a tecnologia de memória altera o custo de cada escrita, e a
+capacidade da cache altera qual política compensa. Uma taxonomia útil
+deve, portanto, ser lida como um mapa de compromissos, e não como um
+ranking de métodos.
 
 \section{Considerações Finais}
+
+Este trabalho organizou as arquiteturas de memória cache a partir de duas
+decisões de projeto: o método de mapeamento, que define em quais linhas um
+bloco pode ser armazenado, e a política de escrita, que define quando as
+modificações feitas pela CPU chegam à memória principal. Para sustentar a
+comparação, foram fixados os conceitos de base e os três tipos de erro,
+dos quais apenas o de conflito depende do mapeamento.
+
+Em ambas as dimensões, o que se observa é um compromisso, e não uma
+solução superior às demais. Os métodos de mapeamento formam um espectro: o
+direto é simples e barato, mas sujeito a conflitos e ao
+\textit{thrashing}; o totalmente associativo elimina o conflito ao custo de
+comparar as \textit{tags} de todas as linhas em paralelo; o associativo por
+conjunto reúne o melhor dos dois extremos, o que explica seu uso corrente
+com poucas linhas por conjunto. Nas políticas de escrita, o
+\textit{write-through} mantém a memória principal sempre atualizada e
+simplifica a consistência, ao preço de maior tráfego, enquanto o
+\textit{write-back} reduz esse tráfego, mas exige o \textit{dirty bit} e
+torna a coerência mais complexa.
+
+Como limitações, o trabalho não aprofundou as políticas de substituição
+nem a coerência entre múltiplas caches. Como trabalhos futuros, sugere-se 
+comparar algoritmos de substituição e analisar o efeito combinado das duas
+decisões em sistemas multiprocessados.
+
+\bibliographystyle{sbc}
+\bibliography{sbc-template}
 
 \end{document}
